@@ -1,8 +1,10 @@
-# System Architecture — AI Creative Ads Generator
+# System Architecture — AI-Powered Creative Ads System
 
 ## Overview
 
-This system generates full-funnel ad creative sets using AI, produces video assets, and manages the creative lifecycle through a Notion-backed workflow. It separates **AI generation** from **human judgment** to enable continuous, scalable creative production.
+This system generates full-funnel ad creative sets using AI, produces video assets, and manages the creative lifecycle through a Notion-backed dashboard. It separates **AI generation** from **human judgment** to enable continuous, scalable creative production.
+
+The entire pipeline — from LLM generation to video creation to Notion storage — runs within a single Streamlit application with no external orchestration dependencies.
 
 ---
 
@@ -10,48 +12,93 @@ This system generates full-funnel ad creative sets using AI, produces video asse
 
 ```mermaid
 flowchart TB
-    subgraph UI["Streamlit Thin Client"]
+    subgraph APP["Streamlit Application"]
         A["Input Form<br/>(persona, market, funnel stage)"]
-        B["Trigger n8n Webhook"]
-        C["Creative Manager<br/>(browse, filter, tag)"]
-        D["Regenerate Ad<br/>(feedback → n8n)"]
+        B["Pipeline Orchestrator"]
+        C["Schema Validator"]
+        D["Video Poller<br/>(3s intervals, auto-refresh)"]
+        E["Creative Manager<br/>(browse, filter, tag, regenerate)"]
     end
 
-    subgraph N8N["n8n Orchestrator — Full Generation"]
-        E["Webhook: /generate-ads"]
-        F["Validate Inputs<br/>Generate Set ID"]
-        G["Call GROQ LLM<br/>(7 ads + 5 video prompts)"]
-        H["Validate JSON Schema<br/>(A-G mapping, V1-V5)"]
-        I["Create 7 Notion Pages<br/>(Status: Generating)"]
-        J["Trigger 5 KIE Video Tasks"]
-        K["Poll Video Status<br/>(5s intervals, 60 max)"]
-        L["Update Notion<br/>(Video URLs + Status)"]
-        E --> F --> G --> H --> I --> J --> K --> L
+    subgraph SERVICES["Service Layer (Python)"]
+        F["services/llm.py<br/>LLM API Client"]
+        G["services/video.py<br/>Video API Client"]
+        H["services/notion.py<br/>Notion API Client"]
+        I["services/validator.py<br/>JSON Schema Validator"]
     end
 
-    subgraph REGEN["n8n — Single Ad Regeneration"]
-        M["Webhook: /regenerate-ad"]
-        N["Call GROQ<br/>(single ad + feedback)"]
-        O["Validate & Update Notion<br/>(increment iteration)"]
-        M --> N --> O
+    subgraph EXT["External APIs"]
+        J["GROQ API<br/>LLaMA 3.3 70B Versatile"]
+        K["KIE API<br/>Runway Text-to-Video"]
+        L[("Notion Database<br/>Single Source of Truth")]
     end
 
-    subgraph EXT["External Services"]
-        P["GROQ API<br/>LLM Creative Generation"]
-        Q["KIE / Runway API<br/>AI Video Generation"]
-        R[("Notion Database<br/>Single Source of Truth")]
-    end
+    A --> B
+    B --> F --> J
+    J --> C --> I
+    B --> H --> L
+    B --> G --> K
+    D --> G
+    D --> H
+    E -. "reads / writes" .-> H
+    E -. "regenerates" .-> F
+```
 
-    A --> B --> E
-    G --> P
-    J --> Q
-    K --> Q
-    I --> R
-    L --> R
-    O --> R
-    C -. "reads" .-> R
-    D --> M
-    C -. "writes tags/notes" .-> R
+---
+
+## Pipeline Flow
+
+```
+1. USER INPUT
+   Persona + Market + Funnel Stage
+        │
+        ▼
+2. LLM GENERATION
+   GROQ API (LLaMA 3.3 70B) generates structured JSON:
+   • 7 ad creatives (A-G) with headlines, primary text, CTAs
+   • 5 video prompts (V1-V5) aligned to funnel intent
+        │
+        ▼
+3. SCHEMA VALIDATION
+   Validates JSON structure:
+   • A-G creative mapping with correct funnel stages
+   • V1-V5 video prompt assignment
+   • Language mapping (EN for A-F, ES for G)
+   • Automatic retry with corrective prompt on failure
+        │
+        ▼
+4. NOTION PAGE CREATION
+   Creates 7 pages in Notion database with:
+   • Set ID, Ad Label, Funnel Stage, Language
+   • Headline, Primary Text, CTA
+   • Video ID assignment, Status: Not started
+        │
+        ▼
+5. VIDEO GENERATION
+   Triggers 5 video tasks via KIE/Runway API:
+   • 5-second vertical clips (720p, 9:16 aspect ratio)
+   • Optimized for social media (Reels, TikTok, Shorts)
+        │
+        ▼
+6. VIDEO POLLING
+   Auto-refreshes every 3 seconds:
+   • Checks video status for each task
+   • Updates Notion pages with video URLs on completion
+   • Updates status to Generated when all videos complete
+   • Displays real-time progress (X/5 complete)
+        │
+        ▼
+7. CREATIVE MANAGER
+   Single-page dashboard to manage all creatives:
+   • Browse and filter by set, funnel stage, language, tag
+   • Preview videos inline alongside ad copy
+   • Tag: Draft / Testing / Needs Revision / Approved / Winner
+   • Add notes and feedback per creative
+   • Regenerate individual ads with specific feedback
+        │
+        ▼
+8. ITERATION LOOP
+   Feedback → LLM regenerates single ad → Notion page updated → Repeat
 ```
 
 ---
@@ -62,26 +109,28 @@ flowchart TB
 ┌─────────────────────────────────────────────────────────────┐
 │                        AI DOMAIN                            │
 │                                                             │
-│  GROQ LLM generates:                                       │
-│    • 7 ad creatives (headlines, copy, CTAs)                 │
+│  LLM (LLaMA 3.3 70B via GROQ) generates:                  │
+│    • 7 ad creatives (headlines, primary text, CTAs)         │
 │    • Multi-language variants (EN + ES)                      │
 │    • Funnel-stage targeting (Awareness → Conversion)        │
+│    • 5 video prompts aligned to funnel intent               │
 │                                                             │
 │  KIE / Runway generates:                                    │
-│    • 5 distinct video assets (720p, 9:16)                   │
-│    • Visual concepts aligned to funnel intent               │
+│    • 5 distinct video assets (5s, 720p, 9:16)              │
+│    • Visual concepts from AI-written video prompts          │
 │                                                             │
 │  Schema Validator ensures:                                  │
 │    • Correct A-G creative mapping                           │
 │    • V1-V5 video assignment                                 │
 │    • Structural integrity before any human review           │
+│    • Auto-retry with corrective prompts on failure          │
 │                                                             │
 ├─────────────────────────── HANDOFF ─────────────────────────┤
 │                                                             │
 │                      HUMAN DOMAIN                           │
 │                                                             │
 │  Creative Manager enables:                                  │
-│    • Review all generated creatives                         │
+│    • Review all generated creatives with inline video       │
 │    • Tag: Winner / Approved / Testing / Needs Revision      │
 │    • Add notes and feedback per ad                          │
 │    • Regenerate individual ads with specific feedback        │
@@ -99,36 +148,9 @@ flowchart TB
 
 ---
 
-## Data Flow
-
-```
-1. USER INPUT
-   Persona + Market + Funnel Stage
-        │
-        ▼
-2. n8n ORCHESTRATION
-   Webhook → GROQ LLM → JSON Validation → Notion Pages → Video Tasks → Polling → Notion Updates
-        │
-        ▼
-3. NOTION (Source of Truth)
-   7 creative pages with:
-   - Set ID, Ad Label (A-G), Funnel Stage, Language
-   - Headline, Primary Text, CTA
-   - Video ID, Video URL, Status
-   - Tag, Iteration, Notes
-        │
-        ▼
-4. CREATIVE MANAGER
-   Browse → Filter → Tag → Annotate → Regenerate
-        │
-        ▼
-5. ITERATION LOOP
-   Feedback → n8n Regen Workflow → Updated Notion Page → Repeat
-```
-
----
-
 ## Creative Set Structure
+
+Each generation produces **7 ad creatives** mapped across the full marketing funnel, paired with **5 AI-generated videos**. Two ads reuse videos to test copy variations against the same visual.
 
 | Ad | Funnel Stage | Language | Video | Reused? | Purpose |
 |----|-------------|----------|-------|---------|---------|
@@ -140,25 +162,93 @@ flowchart TB
 | F  | Conversion  | EN       | V5    | No      | Direct response / CTA-heavy |
 | G  | Full        | ES       | V4    | Yes     | Spanish market variant |
 
+**Why this structure?**
+- 3 Awareness variants (A-C) allow A/B/C testing at top of funnel
+- Mid-funnel pair (D-E) tests copy variation with identical video
+- Conversion ad (F) has its own dedicated video for direct response
+- Spanish variant (G) reuses V4 to test multi-language with proven visual
+
+---
+
+## Notion Database Schema
+
+### Required Properties (13)
+
+| Property | Type | Description |
+|----------|------|-------------|
+| Headline | title | Ad headline (Notion title column) |
+| Set ID | rich_text | Unique generation set identifier (e.g. SET-7335547288) |
+| Persona | rich_text | Target audience description |
+| Market | rich_text | Market segment |
+| Funnel Stage | select | Awareness / Mid / Conversion / Full |
+| Ad Label | select | A through G |
+| Language | select | EN or ES |
+| Primary Text | rich_text | Ad body copy |
+| CTA | rich_text | Call to action text |
+| Video ID | rich_text | V1 through V5 |
+| Video URL | url | Generated video link |
+| Reused? | checkbox | Whether video is shared with another ad |
+| Status | status | Not started → Generated → Done |
+
+### Optional Properties (3)
+
+| Property | Type | Description |
+|----------|------|-------------|
+| Tag | select | Draft / Testing / Needs Revision / Approved / Winner |
+| Iteration | number | Regeneration count (starts at 1) |
+| Notes | rich_text | User feedback and annotations |
+
 ---
 
 ## Technology Stack
 
-| Layer | Technology | Role |
-|-------|-----------|------|
-| Frontend | Streamlit | Interactive web UI |
-| Orchestration | n8n | Workflow automation, API coordination |
-| LLM | GROQ API (GPT-OSS-120B) | Creative copy generation |
-| Video | KIE / Runway API | AI video generation |
-| Database | Notion API | Creative storage, tagging, lifecycle |
+| Layer | Technology | Purpose |
+|-------|-----------|---------|
+| Frontend & Orchestration | Streamlit | Web UI + pipeline execution |
+| LLM | GROQ API (LLaMA 3.3 70B Versatile) | Ad copy and video prompt generation |
+| Video | KIE API (Runway Text-to-Video) | 5-second AI video generation |
+| Database | Notion API | Creative storage, tagging, lifecycle management |
 | Config | python-dotenv | Environment variable management |
 
 ---
 
-## Modes of Operation
+## Service Layer
 
-**n8n Mode** (production): Streamlit triggers n8n webhooks; n8n handles all pipeline logic; results read from Notion.
+```
+services/
+├── llm.py          # GROQ API client
+│                    # - generate_full_set(): 7 ads + 5 video prompts
+│                    # - generate_single_creative(): regenerate one ad with feedback
+│                    # - Auto-retry with corrective prompt on JSON parse failure
+│
+├── notion.py       # Notion API client
+│                    # - create_page(): write creative to database
+│                    # - update_page(): update video URLs, status, tags
+│                    # - query_database(): filter by set ID, funnel stage, etc.
+│                    # - check_required_properties(): validate database schema
+│                    # - extract_page_values(): parse Notion page to flat dict
+│
+├── validator.py    # JSON schema validation
+│                    # - validate_payload(): verify full 7-ad + 5-video structure
+│                    # - validate_single_creative(): verify single regenerated ad
+│                    # - Enforces A-G mapping, V1-V5 assignment, language rules
+│
+└── video.py        # KIE/Runway API client
+                     # - create_video_task(): submit video generation request
+                     # - get_video_status(): poll for completion + video URL
+                     # - 720p, 9:16, 5-second duration
+```
 
-**Direct Mode** (fallback): Pipeline runs entirely inside Streamlit; useful for development or when n8n is not available.
+---
 
-The mode is auto-detected based on whether `N8N_WEBHOOK_URL` is set in the environment.
+## Deployment
+
+The application is deployed on **Streamlit Cloud** with API keys stored as Streamlit secrets. No additional infrastructure (servers, databases, containers) is required — the app connects directly to GROQ, KIE, and Notion APIs.
+
+```
+Streamlit Cloud
+├── app.py (main entry point)
+├── services/ (API clients)
+├── requirements.txt (dependencies)
+└── Secrets (GROQ_API_KEY, KIE_API_KEY, NOTION_API_KEY, NOTION_DATABASE_ID)
+```
