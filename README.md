@@ -145,6 +145,8 @@ NOTION_VERSION="2022-06-28"
 
 ## Architecture
 
+For the full system architecture diagram including the AI/human decision boundary, see [docs/architecture.md](docs/architecture.md).
+
 ```
 ┌─────────────────────────────────────────┐
 │              AI DOMAIN                   │
