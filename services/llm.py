@@ -3,7 +3,6 @@ from typing import Dict, Tuple
 
 import requests
 
-
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 MODEL_ID = "llama-3.3-70b-versatile"
 
