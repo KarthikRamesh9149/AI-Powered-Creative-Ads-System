@@ -1,6 +1,5 @@
 from typing import Dict, Tuple
 
-
 FUNNEL_STAGES = {"Awareness", "Mid", "Conversion", "Full"}
 REQUIRED_TOP_LEVEL = {"set_id", "inputs", "videos", "creatives"}
 REQUIRED_VIDEO_KEYS = {"video_id", "prompt"}

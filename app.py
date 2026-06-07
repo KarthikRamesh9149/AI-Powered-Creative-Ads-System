@@ -11,7 +11,6 @@ import time
 import uuid
 from typing import Dict, List, Optional
 
-import requests as _requests
 import streamlit as st
 
 try:
@@ -22,13 +21,13 @@ except Exception:
 from services.llm import generate_creative_set, generate_single_creative
 from services.notion import (
     NotionClient,
+    _build_property,
     build_notion_properties,
     build_tag_update_properties,
     build_update_properties,
     check_required_properties,
     database_url,
     extract_page_values,
-    _build_property,
 )
 from services.validator import validate_payload, validate_single_creative
 from services.video import create_video_task, get_video_status
@@ -867,7 +866,6 @@ def _render_card(card: Dict) -> None:
         # Header
         funnel = card.get("Funnel Stage", "")
         lang = card.get("Language", "")
-        status = card.get("Status", "")
         iteration = card.get("Iteration", 1) or 1
         set_id = card.get("Set ID", "")
         tag = card.get("Tag", "Draft") or "Draft"
