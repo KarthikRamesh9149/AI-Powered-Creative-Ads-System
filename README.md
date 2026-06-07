@@ -79,15 +79,27 @@ All creatives live in a Notion database with full properties: headline, primary 
 ## Getting Started
 
 ### Prerequisites
-- Python 3.9+
+- Python 3.10+
 - API keys for: LLM service, Video generation service, and Notion
 
 ### Installation
 
 ```bash
-pip install -r requirements.txt
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+Copy-Item .env.example .env   # Add your API keys
+python -m streamlit run app.py
+```
+
+macOS/Linux:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
 cp .env.example .env   # Add your API keys
-streamlit run app.py
+python -m streamlit run app.py
 ```
 
 ### Configuration
@@ -100,7 +112,23 @@ KIE_API_KEY="..."            # AI video generation
 NOTION_API_KEY="..."         # Notion integration
 NOTION_DATABASE_ID="..."     # Your Notion database ID
 NOTION_VERSION="2022-06-28"
+NOTION_DATA_SOURCE_ID=""     # Optional Notion data source parent
+KIE_CALLBACK_URL=""          # Optional async video callback URL
 ```
+
+Keep `.env` local. For Streamlit Cloud, store the same values in app secrets rather than committing credentials.
+
+### Development
+
+Install the development tools and run the local checks before opening a pull request:
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m ruff check .
+python -m pytest
+```
+
+The repository also includes a GitHub Actions workflow that runs linting and tests on Python 3.10 and 3.12.
 
 ---
 
@@ -125,6 +153,9 @@ NOTION_VERSION="2022-06-28"
 │   └── video.py            # AI video generation
 ├── docs/
 │   └── architecture.md     # System architecture diagram
+├── tests/                  # Unit tests for validation and Notion helpers
+├── pyproject.toml          # Project metadata and lint/test configuration
+├── requirements-dev.txt    # Development tooling
 ├── requirements.txt
 ├── .env.example
 └── README.md

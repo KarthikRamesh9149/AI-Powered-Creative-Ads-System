@@ -1,5 +1,13 @@
 .env
+.env.*
+!.env.example
+.streamlit/secrets.toml
 __pycache__/
 *.pyc
 .claude/
 *.sqlite
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.log
+*.db

@@ -2,7 +2,6 @@ from typing import Dict, Optional
 
 import requests
 
-
 NOTION_BASE_URL = "https://api.notion.com/v1"
 REQUIRED_PROPERTIES = [
     "Set ID",
@@ -19,8 +18,6 @@ REQUIRED_PROPERTIES = [
     "Reused?",
     "Status",
 ]
-
-OPTIONAL_PROPERTIES = ["Tag", "Iteration", "Notes"]
 
 DEFAULT_PROPERTY_TYPES = {
     "Set ID": "title",

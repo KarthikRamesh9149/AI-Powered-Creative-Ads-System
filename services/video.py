@@ -1,6 +1,5 @@
 import requests
 
-
 RUNWAY_GENERATE_URL = "https://api.kie.ai/api/v1/runway/generate"
 RUNWAY_STATUS_URL = "https://api.kie.ai/api/v1/runway/record-detail"
 
