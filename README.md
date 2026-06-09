@@ -309,15 +309,15 @@ Check that `.env` exists, contains the required variables, and is loaded from th
 
 Create the required properties listed in the Notion schema section. Property names must match exactly.
 
-### "Invalid JSON from model."
+### Invalid JSON From Model
 
 The LLM response did not parse as strict JSON after a retry. Try a simpler persona or market prompt, then run again.
 
-### Video generation stays pending.
+### Video Generation Stays Pending
 
 The app polls for completion and stops auto-refreshing after repeated attempts. Use the Refresh button or check the KIE task/provider status.
 
-### Notion pages are created but videos do not appear.
+### Notion Pages Are Created But Videos Do Not Appear
 
 Video generation can fail independently from text generation. The text creatives remain available even when one or more video tasks fail.
 
@@ -344,3 +344,7 @@ Video generation can fail independently from text generation. The text creatives
 ## Project Positioning
 
 This repo is a compact example of AI product engineering: it combines prompt design, structured validation, API orchestration, async task tracking, human review workflows, and automated quality checks in a small but realistic application.
+
+## License
+
+All rights reserved. This repository is public for portfolio and recruitment review. Reuse, redistribution, or commercial use requires explicit written permission from Karthik Ramesh.
