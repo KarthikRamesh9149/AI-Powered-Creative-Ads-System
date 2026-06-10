@@ -4,6 +4,12 @@ A Streamlit application for generating, validating, storing, and iterating full-
 
 This project is built around a practical marketing operations problem: turning a persona and market brief into a structured creative set that a human can review, tag, annotate, and improve without losing the relationship between copy, video prompts, funnel stage, and iteration history.
 
+## Product Screenshot
+
+Real local Streamlit run showing the generation form and creative manager shell. Full generation, video polling, and Notion sync require the configured GROQ, KIE, and Notion credentials documented below.
+
+![AI creative ads dashboard with generation form and creative manager](docs/assets/screenshots/creative-ads-dashboard.png)
+
 ## What It Does
 
 The app accepts a target persona, market, and funnel focus, then orchestrates a creative production pipeline:
