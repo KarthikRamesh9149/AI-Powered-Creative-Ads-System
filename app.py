@@ -6,7 +6,9 @@ creates video assets via KIE API, and stores everything in Notion.
 Run: set env vars in .env then `streamlit run app.py`.
 """
 
+import html
 import os
+import re
 import time
 import uuid
 from typing import Dict, List, Optional
@@ -83,6 +85,16 @@ def _safe_rerun() -> None:
         st.rerun()
     except AttributeError:
         st.experimental_rerun()
+
+
+def _html_text(value: object) -> str:
+    """Escape provider/Notion text before interpolating into Streamlit HTML."""
+    return html.escape(str(value), quote=True)
+
+
+def _css_slug(value: object) -> str:
+    slug = re.sub(r"[^a-z0-9-]+", "-", str(value).lower().strip())
+    return slug.strip("-") or "draft"
 
 
 # ---------------------------------------------------------------------------
@@ -870,19 +882,19 @@ def _render_card(card: Dict) -> None:
         set_id = card.get("Set ID", "")
         tag = card.get("Tag", "Draft") or "Draft"
 
-        tag_class = f"tag-{tag.lower().replace(' ', '-')}"
+        tag_class = f"tag-{_css_slug(tag)}"
         st.markdown(
             f"<div class='ad-header'>"
-            f"<span class='ad-badge'>Ad {ad_label}</span>"
-            f"<span class='ad-funnel'>{funnel}</span>"
-            f"<span class='ad-lang'>{lang}</span>"
-            f"<span class='{tag_class}'>{tag}</span>"
+            f"<span class='ad-badge'>Ad {_html_text(ad_label)}</span>"
+            f"<span class='ad-funnel'>{_html_text(funnel)}</span>"
+            f"<span class='ad-lang'>{_html_text(lang)}</span>"
+            f"<span class='{tag_class}'>{_html_text(tag)}</span>"
             f"</div>",
             unsafe_allow_html=True,
         )
         if set_id:
             st.markdown(
-                f"<div class='meta'>Set: {set_id}</div>",
+                f"<div class='meta'>Set: {_html_text(set_id)}</div>",
                 unsafe_allow_html=True,
             )
 
@@ -902,7 +914,10 @@ def _render_card(card: Dict) -> None:
         video_url = card.get("Video URL", "")
         if video_id:
             reused_label = " (reused)" if reused else ""
-            st.markdown(f"<div class='video-meta'>Video: {video_id}{reused_label}</div>", unsafe_allow_html=True)
+            st.markdown(
+                f"<div class='video-meta'>Video: {_html_text(video_id)}{reused_label}</div>",
+                unsafe_allow_html=True,
+            )
         if video_url:
             st.video(video_url)
 
