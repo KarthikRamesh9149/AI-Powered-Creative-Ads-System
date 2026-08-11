@@ -3,6 +3,7 @@ from typing import Dict, Optional
 import requests
 
 NOTION_BASE_URL = "https://api.notion.com/v1"
+MAX_QUERY_PAGES = 100
 REQUIRED_PROPERTIES = [
     "Set ID",
     "Persona",
@@ -99,20 +100,45 @@ class NotionClient:
         return response.json()
 
     def query_database(self, filter_obj: Optional[Dict] = None, sorts: Optional[list] = None) -> list:
-        body: Dict = {}
+        base_body: Dict = {}
         if filter_obj:
-            body["filter"] = filter_obj
+            base_body["filter"] = filter_obj
         if sorts:
-            body["sorts"] = sorts
-        response = requests.post(
-            f"{NOTION_BASE_URL}/databases/{self.database_id}/query",
-            headers=self._headers(),
-            json=body,
-            timeout=20,
-        )
-        if response.status_code >= 300:
-            raise RuntimeError(f"Database query failed ({response.status_code}): {response.text}")
-        return response.json().get("results", [])
+            base_body["sorts"] = sorts
+
+        results = []
+        cursor = None
+        seen_cursors = set()
+        for _ in range(MAX_QUERY_PAGES):
+            body = dict(base_body)
+            if cursor:
+                body["start_cursor"] = cursor
+            response = requests.post(
+                f"{NOTION_BASE_URL}/databases/{self.database_id}/query",
+                headers=self._headers(),
+                json=body,
+                timeout=20,
+            )
+            if response.status_code >= 300:
+                raise RuntimeError("Database query failed.")
+
+            payload = response.json()
+            if not isinstance(payload, dict):
+                raise RuntimeError("Database query returned invalid response.")
+            page_results = payload.get("results", [])
+            if not isinstance(page_results, list):
+                raise RuntimeError("Database query returned invalid results.")
+            results.extend(page_results)
+            if not payload.get("has_more"):
+                return results
+
+            next_cursor = payload.get("next_cursor")
+            if not next_cursor or next_cursor in seen_cursors or next_cursor == cursor:
+                raise RuntimeError("Database query pagination cursor did not advance.")
+            seen_cursors.add(next_cursor)
+            cursor = next_cursor
+
+        raise RuntimeError("Database query exceeded pagination limit.")
 
 
 def _text_value(value: str) -> Dict:

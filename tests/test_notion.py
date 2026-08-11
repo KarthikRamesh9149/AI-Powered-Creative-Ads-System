@@ -1,10 +1,64 @@
+import pytest
+
 from services.notion import (
     DEFAULT_PROPERTY_TYPES,
+    NotionClient,
     build_notion_properties,
     build_tag_update_properties,
     build_update_properties,
     database_url,
 )
+
+
+class _FakeResponse:
+    def __init__(self, payload: dict, status_code: int = 200):
+        self._payload = payload
+        self.status_code = status_code
+
+    def json(self):
+        return self._payload
+
+
+def test_query_database_collects_all_pages(monkeypatch):
+    pages = [
+        _FakeResponse({"results": [{"id": "one"}], "has_more": True, "next_cursor": "cursor-1"}),
+        _FakeResponse({"results": [{"id": "two"}], "has_more": False, "next_cursor": None}),
+    ]
+    bodies = []
+
+    def fake_post(url, headers, json, timeout):
+        bodies.append(json)
+        return pages.pop(0)
+
+    monkeypatch.setattr("services.notion.requests.post", fake_post)
+    client = NotionClient("token", "database", None, "2022-06-28")
+
+    assert client.query_database() == [{"id": "one"}, {"id": "two"}]
+    assert bodies == [{}, {"start_cursor": "cursor-1"}]
+
+
+def test_query_database_rejects_repeating_cursor(monkeypatch):
+    response = _FakeResponse({"results": [], "has_more": True, "next_cursor": "same"})
+    monkeypatch.setattr("services.notion.requests.post", lambda *args, **kwargs: response)
+    client = NotionClient("token", "database", None, "2022-06-28")
+
+    with pytest.raises(RuntimeError, match="cursor did not advance"):
+        client.query_database()
+
+
+def test_query_database_enforces_page_cap(monkeypatch):
+    monkeypatch.setattr("services.notion.MAX_QUERY_PAGES", 2)
+    responses = iter(
+        [
+            _FakeResponse({"results": [], "has_more": True, "next_cursor": "cursor-1"}),
+            _FakeResponse({"results": [], "has_more": True, "next_cursor": "cursor-2"}),
+        ]
+    )
+    monkeypatch.setattr("services.notion.requests.post", lambda *args, **kwargs: next(responses))
+    client = NotionClient("token", "database", None, "2022-06-28")
+
+    with pytest.raises(RuntimeError, match="exceeded pagination limit"):
+        client.query_database()
 
 
 def test_build_notion_properties_uses_configured_property_types():

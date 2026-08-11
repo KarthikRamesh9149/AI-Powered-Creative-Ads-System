@@ -121,3 +121,17 @@ def test_validate_single_creative_rejects_wrong_video_mapping():
 
     assert ok is False
     assert message == "Video mapping mismatch for Ad A."
+
+
+def test_validate_payload_rejects_wrong_spanish_funnel_stage():
+    payload = _valid_payload()
+    payload["creatives"][-1]["funnel_stage"] = "Awareness"
+
+    ok, message = validate_payload(
+        payload,
+        expected_inputs={"persona": "founder", "market": "SaaS", "funnel_stage": "Full"},
+        expected_set_id="SET-123",
+    )
+
+    assert ok is False
+    assert message == "Funnel stage mismatch for Ad G."

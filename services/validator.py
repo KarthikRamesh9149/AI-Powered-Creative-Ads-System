@@ -22,7 +22,7 @@ EXPECTED_MAPPING = {
     "D": {"funnel_stage": "Mid", "language": "EN", "video_id": "V4", "reused": False},
     "E": {"funnel_stage": "Mid", "language": "EN", "video_id": "V4", "reused": True},
     "F": {"funnel_stage": "Conversion", "language": "EN", "video_id": "V5", "reused": False},
-    "G": {"funnel_stage": None, "language": "ES", "video_id": "V4", "reused": True},
+    "G": {"funnel_stage": "Full", "language": "ES", "video_id": "V4", "reused": True},
 }
 
 
@@ -104,7 +104,7 @@ def validate_payload(
             return False, f"Video mapping mismatch for Ad {label}."
         if expected["reused"] != creative["reused"]:
             return False, f"Reused flag mismatch for Ad {label}."
-        if expected["funnel_stage"] and expected["funnel_stage"] != creative["funnel_stage"]:
+        if expected["funnel_stage"] != creative["funnel_stage"]:
             return False, f"Funnel stage mismatch for Ad {label}."
 
     return True, ""
@@ -132,7 +132,7 @@ def validate_single_creative(data: Dict, ad_label: str) -> Tuple[bool, str]:
         return False, f"Video mapping mismatch for Ad {ad_label}."
     if expected["reused"] != data.get("reused"):
         return False, f"Reused flag mismatch for Ad {ad_label}."
-    if expected["funnel_stage"] and expected["funnel_stage"] != data.get("funnel_stage"):
+    if expected["funnel_stage"] != data.get("funnel_stage"):
         return False, f"Funnel stage mismatch for Ad {ad_label}."
 
     for field in ["headline", "primary_text", "cta"]:
