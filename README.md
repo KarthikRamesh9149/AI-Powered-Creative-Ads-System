@@ -1,93 +1,114 @@
 # AI-Powered Creative Ads System
 
-A controlled Streamlit workspace that turns a persona, market, and funnel focus into seven validated ad variants, five video concepts, and a Notion review queue. It integrates Groq for copy, KIE/Runway for asynchronous video jobs, and Notion for durable human review; it does not publish ads automatically.
+Move from a campaign brief to a reviewable full-funnel creative set without losing control of the output. This Streamlit workspace turns a persona, market, and primary funnel focus into seven validated ad variants, five short-form video concepts, and a Notion review queue. It is built for growth teams and creative operators who want a structured starting point for human review, not automatic ad publishing.
 
-![Local Streamlit creative workspace showing the persona, market, and funnel inputs before any provider-backed generation](docs/assets/screenshots/creative-ads-dashboard.png)
+![Creative Ads System workspace](docs/assets/screenshots/creative-ads-dashboard.png)
 
-The screenshot is a genuine local render of the application shell. Generated cards, video progress, and Notion records appear only after authentication and correctly configured provider credentials.
+*Local application shell before a provider-backed run. Creative cards, video status, and Notion records appear after sign-in and provider configuration.*
+
+## The product workflow
+
+1. Enter the target persona, market, and funnel focus.
+2. Generate a fixed creative set: seven ads across awareness, mid-funnel, conversion, and Spanish full-funnel coverage, plus five distinct video prompts.
+3. Validate the whole payload before any video request is made.
+4. Create one review record per ad in Notion, start the five KIE/Runway video jobs, and poll their status from the workspace.
+5. Review, tag, annotate, and regenerate individual ads with feedback. A person still approves anything that leaves the tool.
+
+The fixed set makes comparisons deliberate rather than accidental: A–C are English awareness variants on V1–V3; D and E are English mid-funnel variants sharing V4; F is an English conversion variant on V5; G is Spanish full-funnel copy on V4. The validator requires that mapping, five unique prompts, all seven labels, echoed brief inputs, and non-empty copy before downstream work begins.
+
+## What stands out
+
+- **A repeatable creative contract.** Each run produces the same reviewable shape instead of an unbounded collection of suggestions.
+- **Copy and motion in one handoff.** The system pairs each ad with a video concept and tracks asynchronous video results against the relevant Notion records.
+- **Feedback stays attached to the work.** Reviewers can update tags and notes in Notion, then regenerate a single ad instead of throwing away a complete set.
+- **Useful failure boundaries.** Provider responses are parsed as structured data, bounded by input and output limits, and surfaced through generic UI errors.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  User --> Auth[Shared-secret Streamlit guard]
-  Auth --> App[Workflow orchestrator]
-  App --> Groq[Groq structured generation]
-  Groq --> Validate[Exact payload contract + size limits]
-  Validate --> Notion[Notion review records]
-  Validate --> KIE[KIE video tasks]
-  KIE --> Poll[Bounded polling]
-  Poll --> Notion
+  A[Creative operator] --> B[Authenticated Streamlit workspace]
+  B --> C[Groq structured copy generation]
+  C --> D[Creative-contract validator]
+  D --> E[Notion review records]
+  D --> F[KIE / Runway video tasks]
+  F --> G[Bounded status polling]
+  G --> E
+  E --> H[Human review and single-ad regeneration]
 ```
 
-The validator enforces the exact set ID, echoed inputs, five unique prompts, seven A–G ads, language/funnel/video mappings, required copy, and bounded provider text. External errors are converted to generic UI messages so response bodies and operational details are not exposed. Transient provider failures receive one bounded retry.
+## Tech stack
 
-## Setup
+| Layer | Implementation |
+| --- | --- |
+| Product UI and orchestration | Streamlit, Python 3.10+ |
+| Copy generation | Groq chat completions (`llama-3.3-70b-versatile`) |
+| Video generation | KIE API's Runway endpoints, 5-second 720p 9:16 tasks |
+| Review surface | Notion database API |
+| Contracts and HTTP | Python validation module, `requests` |
+| Quality gates | Ruff and pytest; provider calls are mocked in tests |
 
-Requires Python 3.10+ and Groq, KIE, and Notion accounts.
+## Run it locally
+
+You need Python 3.10 or newer plus Groq, KIE, and Notion credentials.
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate              # Windows: .venv\Scripts\activate
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 python -m pip install -r requirements.txt
 cp .env.example .env
-python -m streamlit run app.py
+streamlit run app.py
 ```
 
-Configure:
+Set the required values in `.env` before opening the app:
 
-| Variable | Required | Purpose |
-| --- | --- | --- |
-| `CREATIVE_ADS_ACCESS_TOKEN` | yes | Long random shared secret; app fails closed without it |
-| `GROQ_API_KEY` | yes | Structured copy generation |
-| `KIE_API_KEY` | yes | Video task creation and status |
-| `NOTION_API_KEY` / `NOTION_DATABASE_ID` | yes | Review records |
-| `NOTION_VERSION` | yes | Notion API contract version |
-| `NOTION_DATA_SOURCE_ID` | no | Alternate page parent |
-| `KIE_CALLBACK_URL` | no | KIE callback URL; must be an operator-controlled HTTPS endpoint |
+| Variable | Used for |
+| --- | --- |
+| `CREATIVE_ADS_ACCESS_TOKEN` | Shared access token for the workspace |
+| `GROQ_API_KEY` | Creative-copy generation |
+| `KIE_API_KEY` | Video task creation and status checks |
+| `NOTION_API_KEY`, `NOTION_DATABASE_ID` | Creating and updating review records |
+| `NOTION_VERSION` | Notion API version; the example uses `2022-06-28` |
 
-The Notion database needs `Set ID`, `Persona`, `Market`, `Funnel Stage`, `Ad Label`, `Language`, `Headline`, `Primary Text`, `CTA`, `Video ID`, `Video URL`, `Reused?`, and `Status`. Optional `Tag`, `Iteration`, and `Notes` fields enable review workflows.
+`NOTION_DATA_SOURCE_ID` is optional when the target is a data source. `KIE_CALLBACK_URL` is optional; when supplied, it should be an operator-controlled HTTPS endpoint.
 
-## Creative contract
+Create a Notion database with these required properties: `Set ID`, `Persona`, `Market`, `Funnel Stage`, `Ad Label`, `Language`, `Headline`, `Primary Text`, `CTA`, `Video ID`, `Video URL`, `Reused?`, and `Status`. `Tag`, `Iteration`, and `Notes` are supported review fields.
 
-| Ad | Stage | Language | Video | Reused |
-| --- | --- | --- | --- | --- |
-| A/B/C | Awareness | EN | V1/V2/V3 | no |
-| D/E | Mid | EN | V4 | E only |
-| F | Conversion | EN | V5 | no |
-| G | Full | ES | V4 | yes |
+## Engineering decisions and verification
 
-Persona is capped at 500 characters, market at 300, and each generated copy/prompt field at 8,000. Five video jobs are submitted only after the LLM payload validates. Polling stops after 60 attempts per job.
+The system treats generated JSON as untrusted. It checks exact top-level keys, the run's set ID and echoed inputs, the A–G/V1–V5 mapping, unique prompts, required text fields, and size limits before persisting work or starting video jobs. Persona and market inputs are capped at 500 and 300 characters; generated fields are capped at 8,000 characters. Video polling waits five seconds between attempts and stops after 60 attempts per task.
 
-## Testing and CI
+Run the local quality gates with:
 
 ```bash
+python -m pip install -r requirements-dev.txt
 python -m ruff check .
 python -m pytest
 ```
 
-CI runs both gates on Python 3.10 and 3.12. Provider integration tests mock all HTTP calls, verify retry/error behavior and request contracts, and incur no paid usage.
+The CI matrix runs these gates on Python 3.10 and 3.12. Tests cover the creative contract, safe Streamlit rendering, Notion schema/request behavior, and mocked provider retries and failure paths. They do not call paid services.
 
-## Costs and operations
+## Provider and cost model
 
-Every successful generation can request one or more Groq completions and five KIE videos; regeneration adds Groq calls. Provider prices and model availability change, so consult their current dashboards, configure hard spend caps, and monitor request volume before deployment. Notion may impose rate limits. The app is synchronous and keeps active run state in the Streamlit session; it has no queue, distributed lock, durable task scheduler, or usage ledger.
+A successful set makes at least one Groq request and starts five KIE video tasks. Regenerating an individual ad makes another Groq request; regeneration never begins another full set by itself. Notion API requests support record creation, review updates, and video-status updates.
 
-## Security and threat model
+Prices, quotas, and model availability belong to the providers and can change. Set provider-side spend caps and watch request volume before sharing the workspace with a team. The application does not include a billing ledger, queue, or durable job scheduler.
 
-Controls address unauthenticated UI access, oversized prompt/output fields, malformed model JSON, HTML injection in rendered provider text, credential leakage through provider errors, transient failures, unbounded Notion pagination, and endless video polling. Secrets remain server-side and ignored local secret files must never be committed.
+## Security and current limits
 
-Residual risks include shared-secret reuse, provider data retention, prompt injection through user inputs or Notion content, SSRF/open-redirect implications of an operator-supplied callback URL, a single Streamlit process, and partial cross-provider writes. For public or multi-user deployment, put the app behind OIDC/SSO, add per-user authorization and quotas, validate callback destinations, use a durable job queue/idempotency keys, centralize audit logs, and define retention/deletion procedures. Human approval remains mandatory before ad publication and legal/brand review.
+The UI fails closed without `CREATIVE_ADS_ACCESS_TOKEN`; secrets stay server-side. The application escapes provider and Notion text before HTML rendering, bounds Notion pagination, uses a single bounded retry for transient provider failures, and does not automatically publish ads.
+
+This is a controlled single-process workspace, not a multi-tenant campaign platform. It uses a shared secret rather than per-user identity, keeps active work in the Streamlit session, and can experience partial writes across Groq, KIE, and Notion. A production deployment should add SSO and authorization, per-user quotas, validated callback destinations, durable jobs with idempotency, audit logging, and retention controls. Review brand, legal, and platform-policy requirements before publishing any creative.
 
 ## Repository map
 
-- `app.py`: authenticated Streamlit UI, orchestration, polling, and review actions.
-- `services/llm.py`: Groq client and structured prompts.
-- `services/video.py`: KIE task/status adapter.
-- `services/notion.py`: schema-aware persistence and bounded pagination.
-- `services/validator.py`: strict creative contract and output limits.
-- `tests/`: deterministic unit and mocked integration coverage.
-- `docs/architecture.md`: deeper data-flow notes.
+- `app.py` — authenticated Streamlit workflow, review actions, and video polling.
+- `services/llm.py` — Groq prompts and structured-response handling.
+- `services/video.py` — KIE/Runway task and status adapter.
+- `services/notion.py` — schema-aware Notion persistence and bounded queries.
+- `services/validator.py` — creative-set contract and limits.
+- `tests/` — deterministic unit and mocked integration tests.
 
 ## License
 
-All rights reserved. This public repository is provided for portfolio, review, and demonstration purposes; see `LICENSE` for the exact terms.
+All rights reserved. This repository is provided for portfolio, review, and demonstration purposes; see [LICENSE](LICENSE).
