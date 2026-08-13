@@ -1,6 +1,9 @@
 from typing import Dict, Tuple
 
 FUNNEL_STAGES = {"Awareness", "Mid", "Conversion", "Full"}
+MAX_PERSONA_CHARS = 500
+MAX_MARKET_CHARS = 300
+MAX_PROVIDER_TEXT_CHARS = 8_000
 REQUIRED_TOP_LEVEL = {"set_id", "inputs", "videos", "creatives"}
 REQUIRED_VIDEO_KEYS = {"video_id", "prompt"}
 REQUIRED_CREATIVE_KEYS = {
@@ -38,6 +41,11 @@ def validate_payload(
     if not isinstance(payload, dict):
         return False, "Response is not a JSON object."
 
+    if len(expected_inputs.get("persona", "")) > MAX_PERSONA_CHARS:
+        return False, "Persona exceeds the input limit."
+    if len(expected_inputs.get("market", "")) > MAX_MARKET_CHARS:
+        return False, "Market exceeds the input limit."
+
     if set(payload.keys()) != REQUIRED_TOP_LEVEL:
         return False, "JSON schema mismatch."
 
@@ -69,6 +77,8 @@ def validate_payload(
         prompts.append(prompt)
         if not isinstance(prompt, str) or not prompt.strip():
             return False, "Video prompt missing."
+        if len(prompt) > MAX_PROVIDER_TEXT_CHARS:
+            return False, "Video prompt exceeds the output limit."
 
     if sorted(video_ids) != ["V1", "V2", "V3", "V4", "V5"]:
         return False, "Video IDs must be V1-V5."
@@ -91,6 +101,8 @@ def validate_payload(
         for field in ["headline", "primary_text", "cta"]:
             if not isinstance(creative.get(field), str) or not creative.get(field).strip():
                 return False, f"Missing creative field: {field}."
+            if len(creative[field]) > MAX_PROVIDER_TEXT_CHARS:
+                return False, f"Creative field exceeds output limit: {field}."
 
     if sorted(labels) != ["A", "B", "C", "D", "E", "F", "G"]:
         return False, "Creatives must be labeled A-G."

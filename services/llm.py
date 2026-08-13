@@ -1,25 +1,38 @@
 import json
+import time
 from typing import Dict, Tuple
 
 import requests
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 MODEL_ID = "llama-3.3-70b-versatile"
+TRANSIENT_STATUS_CODES = {408, 429, 500, 502, 503, 504}
 
 def _call_groq(payload: Dict, api_key: str) -> str:
-    response = requests.post(
-        GROQ_URL,
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        data=json.dumps(payload),
-        timeout=60,
-    )
-    if response.status_code >= 300:
-        raise RuntimeError(f"Upstream error ({response.status_code}).")
+    response = None
+    for attempt in range(2):
+        try:
+            response = requests.post(
+                GROQ_URL,
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                data=json.dumps(payload),
+                timeout=60,
+            )
+        except requests.RequestException as exc:
+            if attempt == 0:
+                time.sleep(0.2)
+                continue
+            raise RuntimeError("Creative provider is temporarily unavailable.") from exc
+        if response.status_code not in TRANSIENT_STATUS_CODES or attempt == 1:
+            break
+        time.sleep(0.2)
+    if response is None or response.status_code >= 300:
+        raise RuntimeError("Creative provider request failed.")
 
     data = response.json()
     content = data.get("choices", [{}])[0].get("message", {}).get("content")
     if not content:
-        raise RuntimeError("Empty response.")
+        raise RuntimeError("Creative provider returned an invalid response.")
     return content
 
 
@@ -129,7 +142,7 @@ Rules:
     ok, parsed, retry_err = _parse_json(content)
     if ok:
         return parsed
-    raise RuntimeError(f"Invalid JSON from model. {err} / {retry_err}")
+    raise RuntimeError("Creative provider returned invalid structured output.") from None
 
 
 def generate_single_creative(
@@ -214,4 +227,4 @@ Rules:
     ok, parsed, retry_err = _parse_json(content)
     if ok:
         return parsed
-    raise RuntimeError(f"Invalid JSON from model. {err} / {retry_err}")
+    raise RuntimeError("Creative provider returned invalid structured output.") from None

@@ -20,6 +20,7 @@ try:
 except Exception:
     load_dotenv = None
 
+from services.auth import access_granted
 from services.llm import generate_creative_set, generate_single_creative
 from services.notion import (
     NotionClient,
@@ -31,7 +32,12 @@ from services.notion import (
     database_url,
     extract_page_values,
 )
-from services.validator import validate_payload, validate_single_creative
+from services.validator import (
+    MAX_MARKET_CHARS,
+    MAX_PERSONA_CHARS,
+    validate_payload,
+    validate_single_creative,
+)
 from services.video import create_video_task, get_video_status
 
 APP_TITLE = "AI-Powered Creative Ads System"
@@ -54,6 +60,7 @@ def _init_state() -> None:
         "display_cards": [],
         "active_filter_set": None,
         "_poll_count": 0,
+        "authenticated": False,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -69,6 +76,23 @@ def _credentials_ready() -> bool:
             os.getenv("NOTION_DATABASE_ID"),
         ]
     )
+
+
+def _require_authentication() -> None:
+    configured = os.getenv("CREATIVE_ADS_ACCESS_TOKEN", "")
+    if not configured:
+        st.error("Access control is not configured. Set CREATIVE_ADS_ACCESS_TOKEN.")
+        st.stop()
+    if st.session_state.get("authenticated"):
+        return
+    st.subheader("Sign in")
+    candidate = st.text_input("Access token", type="password")
+    if st.button("Continue") and access_granted(candidate, configured):
+        st.session_state["authenticated"] = True
+        _safe_rerun()
+    if candidate:
+        st.error("Access denied.")
+    st.stop()
 
 
 def _get_notion_client() -> NotionClient:
@@ -120,8 +144,8 @@ def _start_generation(persona: str, market: str, funnel_stage: str) -> None:
             set_id=set_id,
             api_key=os.getenv("GROQ_API_KEY", ""),
         )
-    except Exception as exc:
-        st.session_state["last_error"] = f"Creative generation failed: {exc}"
+    except Exception:
+        st.session_state["last_error"] = "Creative generation failed. Try again shortly."
         return
 
     # Step 2: Validate schema
@@ -727,9 +751,9 @@ def _render_generation_form() -> None:
     with st.expander("Generate New Set", expanded=not st.session_state.get("active_set_id")):
         col1, col2 = st.columns(2)
         with col1:
-            persona = st.text_input("Persona", placeholder="E.g. busy wellness-focused parent", key="persona_input")
+            persona = st.text_input("Persona", placeholder="E.g. busy wellness-focused parent", key="persona_input", max_chars=MAX_PERSONA_CHARS)
         with col2:
-            market = st.text_input("Market", placeholder="E.g. US subscription skincare", key="market_input")
+            market = st.text_input("Market", placeholder="E.g. US subscription skincare", key="market_input", max_chars=MAX_MARKET_CHARS)
 
         col3, col4 = st.columns([2, 1.5])
         with col3:
@@ -1000,6 +1024,7 @@ def main() -> None:
         load_dotenv()
     st.set_page_config(page_title=APP_TITLE, page_icon="\U0001f3a8", layout="wide")
     _init_state()
+    _require_authentication()
     st.markdown(_CSS, unsafe_allow_html=True)
 
     # Hero header
